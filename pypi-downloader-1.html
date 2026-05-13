@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyPI WHL Downloader</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --accent: #f7c948;
+    --accent2: #4af7b0;
+    --danger: #f74a4a;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    background-image:
+      radial-gradient(ellipse 80% 40% at 50% -10%, rgba(247,201,72,0.08) 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px);
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  .header h1 {
+    font-family: var(--sans);
+    font-size: clamp(28px, 5vw, 48px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    color: var(--accent);
+    text-shadow: 0 0 40px rgba(247,201,72,0.3);
+  }
+
+  .header p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    width: 100%;
+    max-width: 780px;
+    margin-bottom: 20px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 160px;
+  }
+
+  label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  input, select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+
+  input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(247,201,72,0.1);
+  }
+
+  input::placeholder { color: var(--muted); }
+
+  .btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 10px 22px;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    align-self: flex-end;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn:hover { background: #ffe07a; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { background: #3a3a20; color: var(--muted); cursor: not-allowed; transform: none; }
+
+  .btn-sm {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--accent2);
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+  }
+  .btn-sm:hover { border-color: var(--accent2); background: rgba(74,247,176,0.07); }
+
+  .btn-dl {
+    background: transparent;
+    border: 1px solid var(--accent2);
+    color: var(--accent2);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: all 0.15s;
+  }
+  .btn-dl:hover { background: rgba(74,247,176,0.12); }
+
+  .section-title {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  #log {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    font-size: 12px;
+    line-height: 1.8;
+    max-height: 220px;
+    overflow-y: auto;
+    color: var(--muted);
+  }
+
+  #log::-webkit-scrollbar { width: 4px; }
+  #log::-webkit-scrollbar-track { background: transparent; }
+  #log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-info { color: var(--muted); }
+  .log-ok { color: var(--accent2); }
+  .log-warn { color: var(--accent); }
+  .log-err { color: var(--danger); }
+  .log-head { color: var(--text); font-weight: 600; }
+
+  .pkg-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 360px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .pkg-list::-webkit-scrollbar { width: 4px; }
+  .pkg-list::-webkit-scrollbar-track { background: transparent; }
+  .pkg-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .pkg-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    transition: border-color 0.15s;
+  }
+
+  .pkg-item:hover { border-color: #2e2e3e; }
+
+  .pkg-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pkg-name span {
+    color: var(--muted);
+    font-size: 11px;
+    margin-left: 6px;
+  }
+
+  .pkg-size {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .badge {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  .badge-whl { background: rgba(74,247,176,0.12); color: var(--accent2); border: 1px solid rgba(74,247,176,0.25); }
+  .badge-tar { background: rgba(247,201,72,0.12); color: var(--accent); border: 1px solid rgba(247,201,72,0.25); }
+  .badge-dep { background: rgba(100,100,130,0.15); color: var(--muted); border: 1px solid var(--border); }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .count-badge {
+    background: rgba(247,201,72,0.12);
+    color: var(--accent);
+    border: 1px solid rgba(247,201,72,0.2);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 11px;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 32px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .warning-box {
+    background: rgba(247,201,72,0.06);
+    border: 1px solid rgba(247,201,72,0.2);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--accent);
+    margin-top: 14px;
+    line-height: 1.7;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress-bar-wrap {
+    background: var(--border);
+    border-radius: 3px;
+    height: 3px;
+    margin-top: 14px;
+    overflow: hidden;
+    display: none;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⬡ PyPI WHL Downloader</h1>
+  <p>Скачивает .whl файлы пакета и всех его зависимостей через PyPI JSON API</p>
+</div>
+
+<div class="card">
+  <div class="section-title">Параметры</div>
+  <div class="input-row">
+    <div class="input-group" style="flex:2">
+      <label>Пакет</label>
+      <input id="pkgInput" type="text" placeholder="например: django или requests" />
+    </div>
+    <div class="input-group" style="flex:1">
+      <label>Версия (необязательно)</label>
+      <input id="versionInput" type="text" placeholder="напр. 4.2.0" />
+    </div>
+  </div>
+  <div class="input-row" style="margin-top:10px">
+    <div class="input-group">
+      <label>Python версия</label>
+      <select id="pyVer">
+        <option value="cp313">cp313 (3.13)</option>
+        <option value="cp312" selected>cp312 (3.12)</option>
+        <option value="cp311">cp311 (3.11)</option>
+        <option value="cp310">cp310 (3.10)</option>
+        <option value="cp39">cp39 (3.9)</option>
+        <option value="cp38">cp38 (3.8)</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>Платформа</label>
+      <select id="platform">
+        <option value="win">Windows (win_amd64)</option>
+        <option value="linux" selected>Linux (manylinux x86_64)</option>
+        <option value="mac">macOS (macosx x86_64)</option>
+        <option value="any">Любая (pure)</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>Extras (необязательно)</label>
+      <input id="extrasInput" type="text" placeholder="напр. security,socks" />
+    </div>
+    <button class="btn" id="resolveBtn" onclick="startResolve()">Разрешить</button>
+  </div>
+
+  <div class="warning-box">
+    ⚠ Без полного SAT-solver'а: версионные конфликты не разрешаются, берётся последняя подходящая версия.
+    Environment markers (<code>sys_platform</code>, <code>python_version</code>, <code>extra</code>) парсятся
+    и фильтруются по выбранной платформе/версии Python.
+  </div>
+
+  <div class="progress-bar-wrap" id="progressWrap">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+</div>
+
+<div class="card" id="logCard" style="display:none">
+  <div class="section-title">Лог</div>
+  <div id="log"></div>
+</div>
+
+<div class="card" id="resultsCard" style="display:none">
+  <div class="toolbar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="section-title" style="margin:0">Файлы</div>
+      <span class="count-badge" id="countBadge">0</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-sm" onclick="downloadAll()">↓ Скачать все</button>
+      <button class="btn-sm" onclick="clearResults()" style="color:var(--muted)">✕ Очистить</button>
+    </div>
+  </div>
+  <div class="pkg-list" id="pkgList">
+    <div class="empty">Пока ничего нет</div>
+  </div>
+</div>
+
+<script>
+const PYPI_API = 'https://pypi.org/pypi';
+
+let resolvedPackages = [];
+let visitedNames = new Set(); // track by normalized name only (no version) to avoid duplicates
+let total = 0;
+let done = 0;
+
+// ─── Logging ───────────────────────────────────────────────────────────────
+
+function log(msg, type = 'info') {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'log-' + type;
+  line.innerHTML = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setProgress(val) {
+  document.getElementById('progressBar').style.width = val + '%';
+}
+
+// ─── Environment context (for marker evaluation) ───────────────────────────
+
+function buildEnvContext(pyVerTag, platform, requestedExtras) {
+  // pyVerTag: 'cp312' → python_version = '3.12', python_full_version = '3.12.0'
+  const pyNum = pyVerTag.replace('cp', '');
+  const major = pyNum[0];
+  const minor = pyNum.slice(1);
+  const pyVersion = `${major}.${minor}`;
+
+  const sysMap = {
+    win:   'win32',
+    linux: 'linux',
+    mac:   'darwin',
+    any:   'linux',
+  };
+  const osMap = {
+    win:   'nt',
+    linux: 'posix',
+    mac:   'posix',
+    any:   'posix',
+  };
+  const implMap = {
+    win:   'cpython',
+    linux: 'cpython',
+    mac:   'cpython',
+    any:   'cpython',
+  };
+
+  return {
+    python_version: pyVersion,
+    python_full_version: `${pyVersion}.0`,
+    implementation_name: implMap[platform] || 'cpython',
+    implementation_version: `${pyVersion}.0`,
+    sys_platform: sysMap[platform] || 'linux',
+    os_name: osMap[platform] || 'posix',
+    platform_machine: platform === 'win' ? 'AMD64' : 'x86_64',
+    platform_system: platform === 'win' ? 'Windows' : platform === 'mac' ? 'Darwin' : 'Linux',
+    platform_python_implementation: 'CPython',
+    extras: requestedExtras, // set of active extras
+  };
+}
+
+// ─── Marker parser/evaluator ───────────────────────────────────────────────
+// Supports: and, or, not, parentheses, ==, !=, <, >, <=, >=, in, not in
+// Variables: sys_platform, python_version, python_full_version, os_name,
+//            platform_machine, platform_system, implementation_name,
+//            platform_python_implementation, extra
+
+function tokenizeMarker(s) {
+  const tokens = [];
+  let i = 0;
+  while (i < s.length) {
+    if (/\s/.test(s[i])) { i++; continue; }
+    // quoted string
+    if (s[i] === '"' || s[i] === "'") {
+      const q = s[i++];
+      let val = '';
+      while (i < s.length && s[i] !== q) val += s[i++];
+      i++; // closing quote
+      tokens.push({ type: 'string', val });
+      continue;
+    }
+    // parens
+    if (s[i] === '(' || s[i] === ')') {
+      tokens.push({ type: 'paren', val: s[i++] });
+      continue;
+    }
+    // operators and keywords (greedy)
+    const rest = s.slice(i);
+    const opMatch = rest.match(/^(not\s+in|not|and|or|===|~=|==|!=|<=|>=|<|>)/);
+    if (opMatch) {
+      const op = opMatch[1].replace(/\s+/, ' ').trim();
+      tokens.push({ type: 'op', val: op });
+      i += opMatch[1].length;
+      continue;
+    }
+    // identifier
+    const idMatch = rest.match(/^[A-Za-z_][A-Za-z0-9_\.]*/);
+    if (idMatch) {
+      tokens.push({ type: 'id', val: idMatch[0] });
+      i += idMatch[0].length;
+      continue;
+    }
+    i++; // skip unknown
+  }
+  return tokens;
+}
+
+function parseMarkerExpr(tokens, env) {
+  // Recursive descent: or → and → not → atom
+  let pos = 0;
+
+  function peek() { return tokens[pos]; }
+  function consume() { return tokens[pos++]; }
+
+  function parseOr() {
+    let left = parseAnd();
+    while (peek() && peek().type === 'op' && peek().val === 'or') {
+      consume();
+      const right = parseAnd();
+      left = left || right;
+    }
+    return left;
+  }
+
+  function parseAnd() {
+    let left = parseNot();
+    while (peek() && peek().type === 'op' && peek().val === 'and') {
+      consume();
+      const right = parseNot();
+      left = left && right;
+    }
+    return left;
+  }
+
+  function parseNot() {
+    if (peek() && peek().type === 'op' && peek().val === 'not') {
+      consume();
+      return !parseNot();
+    }
+    return parseAtom();
+  }
+
+  function parseAtom() {
+    if (peek() && peek().type === 'paren' && peek().val === '(') {
+      consume(); // (
+      const val = parseOr();
+      if (peek() && peek().type === 'paren' && peek().val === ')') consume(); // )
+      return val;
+    }
+    // comparison: lhs op rhs
+    const lhsTok = consume();
+    const opTok = consume();
+    const rhsTok = consume();
+    if (!lhsTok || !opTok || !rhsTok) return true;
+
+    const lhs = resolveVal(lhsTok, env);
+    const rhs = resolveVal(rhsTok, env);
+    const op = opTok.val;
+
+    return evalOp(lhs, op, rhs, env);
+  }
+
+  function resolveVal(tok, env) {
+    if (!tok) return '';
+    if (tok.type === 'string') return tok.val;
+    if (tok.type === 'id') {
+      const k = tok.val;
+      if (k in env) return env[k];
+      return k;
+    }
+    return tok.val || '';
+  }
+
+  function evalOp(lhs, op, rhs, env) {
+    switch (op) {
+      case '==': return lhs === rhs;
+      case '!=': return lhs !== rhs;
+      case '===': return lhs === rhs;
+      case '<':  return versionCompare(lhs, rhs) < 0;
+      case '>':  return versionCompare(lhs, rhs) > 0;
+      case '<=': return versionCompare(lhs, rhs) <= 0;
+      case '>=': return versionCompare(lhs, rhs) >= 0;
+      case '~=': return versionCompatible(lhs, rhs);
+      case 'in':     return rhs.includes(lhs);
+      case 'not in': return !rhs.includes(lhs);
+      default: return true;
+    }
+  }
+
+  try {
+    return parseOr();
+  } catch(e) {
+    return true; // on parse error, include the dep
+  }
+}
+
+function versionParts(v) {
+  return String(v).split('.').map(p => parseInt(p, 10) || 0);
+}
+
+function versionCompare(a, b) {
+  const pa = versionParts(a), pb = versionParts(b);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function versionCompatible(installed, spec) {
+  // ~= X.Y means >= X.Y, == X.*
+  const parts = versionParts(spec);
+  parts.pop();
+  const prefix = parts.join('.');
+  return versionCompare(installed, spec) >= 0 &&
+    String(installed).startsWith(prefix);
+}
+
+function evaluateMarker(markerStr, env) {
+  if (!markerStr || !markerStr.trim()) return true;
+  const tokens = tokenizeMarker(markerStr.trim());
+  return parseMarkerExpr(tokens, env);
+}
+
+// ─── requires_dist parser ──────────────────────────────────────────────────
+// Format: "PackageName[extra1,extra2] (>=1.0,<2.0) ; marker"
+
+function parseRequiresDist(requires, env) {
+  if (!requires) return [];
+  const result = [];
+
+  for (const req of requires) {
+    const r = req.trim();
+    if (!r) continue;
+
+    // Split on ';' to get marker
+    const semiIdx = r.indexOf(';');
+    const depPart = semiIdx >= 0 ? r.slice(0, semiIdx).trim() : r;
+    const markerPart = semiIdx >= 0 ? r.slice(semiIdx + 1).trim() : '';
+
+    // Evaluate marker — include if true or no marker
+    if (markerPart && !evaluateMarker(markerPart, env)) {
+      continue; // this dep doesn't apply to our environment
+    }
+
+    // Parse dep part: Name[extras] (version_spec)
+    // Regex: name, optional [extras], optional version constraint
+    const m = depPart.match(/^([A-Za-z0-9_\-\.]+)(?:\[([^\]]*)\])?(?:\s*\(([^)]*)\)|\s*([^;\s][^;]*))?/);
+    if (!m) continue;
+
+    const name = m[1].toLowerCase().replace(/_/g, '-');
+    const depExtras = m[2] ? m[2].split(',').map(e => e.trim()) : [];
+    // version constraint (inside parens or bare)
+    const versionConstraint = (m[3] || m[4] || '').trim();
+
+    // Try to extract pinned version ==X.Y.Z
+    let version = null;
+    const pinned = versionConstraint.match(/(?:^|,)\s*==\s*([^\s,]+)/);
+    if (pinned) version = pinned[1];
+
+    result.push({ name, version, extras: depExtras, versionConstraint });
+  }
+
+  return result;
+}
+
+// ─── PyPI API ──────────────────────────────────────────────────────────────
+
+async function fetchPackageInfo(name, version) {
+  // /pypi/{name}/{version}/json  or  /pypi/{name}/json for latest
+  const url = version
+    ? `${PYPI_API}/${encodeURIComponent(name)}/${encodeURIComponent(version)}/json`
+    : `${PYPI_API}/${encodeURIComponent(name)}/json`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+// ─── WHL picker ───────────────────────────────────────────────────────────
+
+function pickBestFile(urls, pyVer, platform) {
+  const platPats = {
+    win:   ['win_amd64', 'win32'],
+    linux: ['manylinux2014_x86_64', 'manylinux_2_17_x86_64', 'manylinux_2_28_x86_64',
+            'manylinux1_x86_64', 'linux_x86_64'],
+    mac:   ['macosx_10_9_x86_64', 'macosx_11_0_x86_64', 'macosx_12_0_x86_64',
+            'macosx_13_0_x86_64', 'macosx_14_0_x86_64'],
+    any:   [],
+  }[platform] || [];
+
+  const pyMaj = pyVer[0] === 'c' ? pyVer : pyVer; // e.g. cp312
+
+  const whls = urls.filter(u => u.filename.endsWith('.whl'));
+
+  function scoreWhl(whl) {
+    const f = whl.filename;
+    // parts: name-version-pythontag-abitag-platformtag.whl
+    const parts = f.replace('.whl', '').split('-');
+    if (parts.length < 5) return 0;
+    const pyTag = parts[2];   // e.g. cp312, py3, py2.py3
+    const abiTag = parts[3];  // e.g. cp312, abi3, none
+    const platTag = parts[4]; // e.g. win_amd64, manylinux..., any
+
+    const isAny = platTag === 'any';
+    const platMatch = isAny || platPats.some(p => platTag.includes(p));
+    if (!platMatch) return 0;
+
+    // Python tag matching
+    const pyTags = pyTag.split('.');
+    const isPureAny = pyTags.some(t => t === 'py3' || t === 'py2' || t.startsWith('py'));
+    const isExactPy = pyTags.some(t => t === pyMaj);
+    const isAbi3 = abiTag === 'abi3';
+
+    let score = 0;
+    if (isAny) score += 1;        // pure python, any platform
+    else score += 10;             // platform-specific
+
+    if (isPureAny) score += 5;
+    else if (isAbi3) score += 15;
+    else if (isExactPy) score += 20;
+    else return 0; // wrong python version, skip
+
+    return score;
+  }
+
+  const scored = whls.map(w => ({ w, s: scoreWhl(w) })).filter(x => x.s > 0);
+  if (scored.length) {
+    scored.sort((a, b) => b.s - a.s);
+    return { file: scored[0].w, type: 'whl' };
+  }
+
+  // Fallback to sdist
+  const sdist = urls.find(u => u.filename.endsWith('.tar.gz'))
+    || urls.find(u => u.filename.endsWith('.zip'))
+    || urls[0];
+  if (sdist) return { file: sdist, type: 'sdist' };
+
+  return null;
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────
+
+function formatSize(bytes) {
+  if (!bytes) return '?';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function addPackageToUI(pkg) {
+  const list = document.getElementById('pkgList');
+  const empty = list.querySelector('.empty');
+  if (empty) empty.remove();
+
+  const item = document.createElement('div');
+  item.className = 'pkg-item';
+
+  const isWhl = pkg.filename.endsWith('.whl');
+  const badgeClass = isWhl ? 'badge-whl' : 'badge-tar';
+  const badgeText = isWhl ? '.whl' : '.sdist';
+  const depBadge = pkg.isDep ? `<span class="badge badge-dep">dep</span>` : '';
+
+  // Escape for inline handler
+  const safeUrl = pkg.url.replace(/'/g, "\\'");
+  const safeFn = pkg.filename.replace(/'/g, "\\'");
+
+  item.innerHTML = `
+    <span class="badge ${badgeClass}">${badgeText}</span>
+    ${depBadge}
+    <span class="pkg-name">${pkg.packageName}<span>v${pkg.version}</span></span>
+    <span class="pkg-size">${formatSize(pkg.size)}</span>
+    <button class="btn-dl" onclick="downloadFile('${safeUrl}', '${safeFn}')">↓</button>
+  `;
+
+  list.appendChild(item);
+  document.getElementById('countBadge').textContent = resolvedPackages.length;
+}
+
+function downloadFile(url, filename) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function downloadAll() {
+  if (!resolvedPackages.length) return;
+  log(`⬇ Начинаем скачивание ${resolvedPackages.length} файлов...`, 'head');
+  for (let i = 0; i < resolvedPackages.length; i++) {
+    const pkg = resolvedPackages[i];
+    await new Promise(r => setTimeout(r, 350 * i));
+    downloadFile(pkg.url, pkg.filename);
+    log(`  [${i+1}/${resolvedPackages.length}] ${pkg.filename}`, 'ok');
+  }
+}
+
+function clearResults() {
+  resolvedPackages = [];
+  visitedNames.clear();
+  document.getElementById('pkgList').innerHTML = '<div class="empty">Пока ничего нет</div>';
+  document.getElementById('countBadge').textContent = '0';
+  document.getElementById('logCard').style.display = 'none';
+  document.getElementById('log').innerHTML = '';
+  document.getElementById('resultsCard').style.display = 'none';
+  document.getElementById('progressWrap').style.display = 'none';
+}
+
+// ─── Main resolve loop ────────────────────────────────────────────────────
+
+async function startResolve() {
+  const pkgName = document.getElementById('pkgInput').value.trim();
+  if (!pkgName) return;
+
+  const versionRaw = document.getElementById('versionInput').value.trim() || null;
+  const pyVer = document.getElementById('pyVer').value;
+  const platform = document.getElementById('platform').value;
+  const extrasRaw = document.getElementById('extrasInput').value.trim();
+  const requestedExtras = new Set(extrasRaw ? extrasRaw.split(',').map(e => e.trim()).filter(Boolean) : []);
+
+  const normalizedName = pkgName.toLowerCase().replace(/[_\.]/g, '-');
+
+  // Build env context for marker evaluation
+  const env = buildEnvContext(pyVer, platform, requestedExtras);
+
+  // Reset state
+  resolvedPackages = [];
+  visitedNames.clear();
+  document.getElementById('pkgList').innerHTML = '<div class="empty">Пока ничего нет</div>';
+  document.getElementById('countBadge').textContent = '0';
+  document.getElementById('log').innerHTML = '';
+  document.getElementById('logCard').style.display = 'block';
+  document.getElementById('resultsCard').style.display = 'block';
+  document.getElementById('progressWrap').style.display = 'block';
+  setProgress(0);
+
+  const btn = document.getElementById('resolveBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Разрешение...';
+
+  log(`Платформа: sys_platform=${env.sys_platform}, python_version=${env.python_version}, os_name=${env.os_name}`, 'info');
+  if (requestedExtras.size) log(`Extras: ${[...requestedExtras].join(', ')}`, 'info');
+
+  // Queue: { name, version, isDep, extras }
+  // extras here = extras requested FOR this package (affects marker `extra == "..."`)
+  const toResolve = [{ name: normalizedName, version: versionRaw, isDep: false, activeExtras: requestedExtras }];
+  total = 1; done = 0;
+
+  while (toResolve.length) {
+    const { name, version, isDep, activeExtras } = toResolve.shift();
+
+    // Normalize name
+    const normName = name.toLowerCase().replace(/[_\.]/g, '-');
+
+    // Deduplicate by name only (first one wins — simplified resolver)
+    if (visitedNames.has(normName)) {
+      done++;
+      setProgress(Math.round(done / Math.max(total, 1) * 100));
+      continue;
+    }
+    visitedNames.add(normName);
+
+    log(`→ <span style="color:var(--text)">${normName}${version ? ' ==' + version : ''}</span>`, 'info');
+
+    let info;
+    try {
+      info = await fetchPackageInfo(normName, version);
+    } catch(e) {
+      log(`  ✗ Не удалось: ${e.message}`, 'err');
+      done++;
+      setProgress(Math.round(done / Math.max(total, 1) * 100));
+      continue;
+    }
+
+    const meta = info.info;
+    const resolvedVersion = meta.version;
+    const urls = info.urls || [];
+
+    log(`  ✓ ${meta.name} ${resolvedVersion}`, 'ok');
+
+    // Pick best file
+    const picked = pickBestFile(urls, pyVer, platform);
+    if (picked) {
+      const pkgData = {
+        packageName: meta.name,
+        version: resolvedVersion,
+        filename: picked.file.filename,
+        url: picked.file.url,
+        size: picked.file.size,
+        isDep,
+      };
+      resolvedPackages.push(pkgData);
+      addPackageToUI(pkgData);
+
+      if (picked.type === 'sdist') {
+        log(`  ⚠ .whl не найден для выбранной платформы/версии Python, берём sdist`, 'warn');
+      }
+    } else {
+      log(`  ✗ Нет доступных файлов`, 'err');
+    }
+
+    // Parse and filter requires_dist with marker evaluation
+    const requires = meta.requires_dist || [];
+
+    // Build env with current package's active extras for marker evaluation
+    const envWithExtras = { ...env, extra: '' }; // default no extra
+
+    // First pass: collect deps without extra constraint
+    // Second pass: if activeExtras set, also include deps gated by those extras
+
+    let includedCount = 0;
+    let skippedCount = 0;
+
+    const parsedDeps = [];
+
+    for (const req of requires) {
+      const r = req.trim();
+      if (!r) continue;
+
+      const semiIdx = r.indexOf(';');
+      const depPart = semiIdx >= 0 ? r.slice(0, semiIdx).trim() : r;
+      const markerPart = semiIdx >= 0 ? r.slice(semiIdx + 1).trim() : '';
+
+      // Check if marker references 'extra'
+      const hasExtraMarker = markerPart.includes('extra');
+
+      let include = false;
+      if (!markerPart) {
+        include = true;
+      } else if (hasExtraMarker) {
+        // Evaluate for each active extra
+        for (const ex of activeExtras) {
+          const envEx = { ...env, extra: ex };
+          if (evaluateMarker(markerPart, envEx)) {
+            include = true;
+            break;
+          }
+        }
+        // If no extras requested, skip extra-gated deps
+      } else {
+        // No extra in marker — evaluate normally
+        include = evaluateMarker(markerPart, envWithExtras);
+      }
+
+      if (!include) {
+        skippedCount++;
+        continue;
+      }
+
+      // Parse dep spec
+      const m = depPart.match(/^([A-Za-z0-9_\-\.]+)(?:\[([^\]]*)\])?(?:\s*\(([^)]*)\)|\s*([><=!~][^;]*))?/);
+      if (!m) continue;
+
+      const depName = m[1].toLowerCase().replace(/[_\.]/g, '-');
+      const depExtras = m[2] ? new Set(m[2].split(',').map(e => e.trim())) : new Set();
+      const versionSpec = (m[3] || m[4] || '').trim();
+
+      // Try to extract pinned version
+      let depVersion = null;
+      const pinMatch = versionSpec.match(/(?:^|,)\s*==\s*([^\s,]+)/);
+      if (pinMatch) depVersion = pinMatch[1];
+
+      if (!visitedNames.has(depName)) {
+        parsedDeps.push({ name: depName, version: depVersion, isDep: true, activeExtras: depExtras });
+        includedCount++;
+      }
+    }
+
+    if (skippedCount > 0 || includedCount > 0) {
+      log(`  Зависимостей: +${includedCount} включено, ${skippedCount} пропущено (маркеры)`, 'info');
+    }
+
+    for (const dep of parsedDeps) {
+      if (!visitedNames.has(dep.name)) {
+        toResolve.push(dep);
+        total++;
+      }
+    }
+
+    done++;
+    setProgress(Math.round(done / Math.max(total, 1) * 100));
+  }
+
+  log(`━━━ Готово: ${resolvedPackages.length} файлов ━━━`, 'head');
+  setProgress(100);
+
+  btn.disabled = false;
+  btn.innerHTML = 'Разрешить';
+}
+
+// Enter to resolve
+document.getElementById('pkgInput').addEventListener('keydown', e => { if (e.key === 'Enter') startResolve(); });
+document.getElementById('versionInput').addEventListener('keydown', e => { if (e.key === 'Enter') startResolve(); });
+</script>
+</body>
+</html>
