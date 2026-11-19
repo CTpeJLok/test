@@ -16,22 +16,58 @@ IMG_EXT = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
 
 
 # ---------- загрузка ----------
-def load_pages(path: Path, dpi: int):
-    """Возвращает список BGR-изображений (по одному на страницу)."""
+def text_layer_ok(text, min_chars=20):
+    """Пригоден ли текстовый слой страницы (есть текст и он не мусорный)."""
+    chars = [c for c in text if not c.isspace()]
+    if len(chars) < min_chars:
+        return False
+    bad = sum(1 for c in chars if c == "\ufffd" or "\ue000" <= c <= "\uf8ff") + 4 * text.count("(cid:")
+    good = sum(1 for c in chars if c.isalnum())
+    return bad / len(chars) < 0.1 and good / len(chars) > 0.5
+
+
+def text_layer_items(page, scale):
+    """Слова из текстового слоя -> фрагменты в пикселях рендера (слова в строке склеиваются, пока нет большого разрыва)."""
+    import fitz
+
+    words = sorted(page.get_text("words"), key=lambda w: (w[5], w[6], w[7]))
+    items, cur = [], None
+    for x0, y0, x1, y1, t, blk, ln, _ in words:
+        r = fitz.Rect(x0, y0, x1, y1) * page.rotation_matrix * scale
+        box = [r.x0, r.y0, r.x1, r.y1]
+        if cur and cur["key"] == (blk, ln) and box[0] - cur["box"][2] < 1.0 * (box[3] - box[1]):
+            cur["text"] += " " + t
+            cur["box"] = [min(cur["box"][0], box[0]), min(cur["box"][1], box[1]),
+                          max(cur["box"][2], box[2]), max(cur["box"][3], box[3])]
+        else:
+            if cur:
+                items.append(cur)
+            cur = {"key": (blk, ln), "text": t, "box": box}
+    if cur:
+        items.append(cur)
+    return [{"text": i["text"].strip(), "score": 1.0, "box": tuple(int(v) for v in i["box"])}
+            for i in items if i["text"].strip()]
+
+
+def load_pages(path: Path, dpi: int, force_ocr: bool = False):
+    """Генератор (изображение BGR, фрагменты текстового слоя или None). None => нужен OCR."""
     if path.suffix.lower() == ".pdf":
         import fitz  # pymupdf
 
-        pages = []
         with fitz.open(path) as doc:
             for p in doc:
                 pix = p.get_pixmap(dpi=dpi, colorspace=fitz.csRGB)
                 arr = np.frombuffer(pix.samples, np.uint8).reshape(pix.h, pix.w, 3)
-                pages.append(cv2.cvtColor(arr, cv2.COLOR_RGB2BGR))
-        return pages
+                img = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+                items = None
+                if not force_ocr and text_layer_ok(p.get_text()):
+                    items = text_layer_items(p, dpi / 72)
+                yield img, items
+        return
     img = cv2.imdecode(np.fromfile(str(path), np.uint8), cv2.IMREAD_COLOR)  # путь с юникодом
     if img is None:
         raise ValueError(f"не удалось прочитать изображение: {path}")
-    return [img]
+    yield img, None
 
 
 # ---------- поиск прямоугольников ----------
@@ -209,11 +245,16 @@ def build_fields(items, rects):
     return title, fields, leftovers
 
 
-def process(ocr, path, dpi):
+def process(get_ocr, path, dpi, force_ocr=False):
+    """get_ocr — функция, лениво создающая PaddleOCR (модель грузится, только если нужен OCR)."""
     pages = []
-    for n, img in enumerate(load_pages(path, dpi), 1):
-        title, fields, rest = build_fields(run_ocr(ocr, img), find_rects(img))
-        pages.append({"page": n, "title": title, "fields": fields, "unassigned_text": rest})
+    for n, (img, items) in enumerate(load_pages(path, dpi, force_ocr), 1):
+        source = "text_layer"
+        if items is None:
+            source = "ocr"
+            items = run_ocr(get_ocr(), img)
+        title, fields, rest = build_fields(items, find_rects(img))
+        pages.append({"page": n, "source": source, "title": title, "fields": fields, "unassigned_text": rest})
     return {"file": str(path), "pages": pages}
 
 
@@ -223,17 +264,24 @@ def main():
     ap.add_argument("-o", "--output", type=Path, default=Path("result.json"))
     ap.add_argument("--lang", default="ru")
     ap.add_argument("--dpi", type=int, default=200)
+    ap.add_argument("--force-ocr", action="store_true", help="не использовать текстовый слой PDF")
     a = ap.parse_args()
 
     files = []
     for p in a.inputs:
         files += sorted(f for f in p.iterdir() if f.suffix.lower() in IMG_EXT | {".pdf"}) if p.is_dir() else [p]
 
-    ocr = make_ocr(a.lang)
+    cache = {}
+
+    def get_ocr():
+        if "ocr" not in cache:
+            cache["ocr"] = make_ocr(a.lang)
+        return cache["ocr"]
+
     results = []
     for f in files:
         try:
-            results.append(process(ocr, f, a.dpi))
+            results.append(process(get_ocr, f, a.dpi, a.force_ocr))
         except Exception as e:  # один плохой файл не должен ронять весь пакет
             print(f"[ошибка] {f}: {e}", file=sys.stderr)
             results.append({"file": str(f), "error": str(e)})
